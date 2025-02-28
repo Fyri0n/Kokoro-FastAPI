@@ -22,8 +22,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 # Create non-root user and set up directories and permissions
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app && \
-    chmod -R 775 /app/api/src
+    chown -R appuser:appuser /app
 
 USER appuser
 WORKDIR /app
@@ -41,6 +40,11 @@ COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
+
+# Switch to root temporarily to ensure proper permissions for api/src
+USER root
+RUN chmod -R 777 /app/api/src
+USER appuser
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
