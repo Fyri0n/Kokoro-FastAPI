@@ -41,8 +41,6 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-RUN chmod -R 777 /app/api/src
-
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
@@ -54,6 +52,8 @@ ENV PYTHONUNBUFFERED=1 \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data
 
 ENV DOWNLOAD_MODEL=true
+
+USER root
 # Download model if enabled
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
     python download_model.py --output api/src/models/v1_0; \
