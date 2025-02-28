@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y \
     curl \
     ffmpeg \
     g++ \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* \
-  && mkdir -p /usr/share/espeak-ng-data \
-  && ln -s /usr/lib/*/espeak-ng-data/* /usr/share/espeak-ng-data/
+&& apt-get clean \
+&& rm -rf /var/lib/apt/lists/* \
+&& mkdir -p /usr/share/espeak-ng-data \
+&& ln -s /usr/lib/*/espeak-ng-data/* /usr/share/espeak-ng-data/
 
 # Install UV using the installer script
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
@@ -23,6 +23,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app
+
+RUN chmod -R 777 /app/api/src
 
 USER appuser
 WORKDIR /app
@@ -41,16 +43,6 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-# Switch to root to ensure full permissions and perform the download
-USER root
-RUN chmod -R 777 /app \
-  && if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-       python download_model.py --output /app/api/src/models/v1_0; \
-     fi
-
-# Switch back to appuser for runtime
-USER appuser
-
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
@@ -59,9 +51,14 @@ ENV PYTHONUNBUFFERED=1 \
     USE_GPU=false \
     PHONEMIZER_ESPEAK_PATH=/usr/bin \
     PHONEMIZER_ESPEAK_DATA=/usr/share/espeak-ng-data \
-    ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
-    DOWNLOAD_MODEL=true \
-    DEVICE="cpu"
+    ESPEAK_DATA_PATH=/usr/share/espeak-ng-data
 
+ENV DOWNLOAD_MODEL=true
+# Download model if enabled
+RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
+    python download_model.py --output api/src/models/v1_0; \
+    fi
+
+ENV DEVICE="cpu"
 # Run FastAPI server through entrypoint.sh
 CMD ["./entrypoint.sh"]
