@@ -23,6 +23,8 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app
+    
+RUN chmod -R 777 /app
 
 USER appuser
 WORKDIR /app
