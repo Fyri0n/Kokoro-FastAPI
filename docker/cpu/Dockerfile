@@ -43,7 +43,7 @@ RUN chmod +x ./entrypoint.sh
 
 # Switch to root temporarily to ensure proper permissions for api/src
 USER root
-RUN chmod -R 777 /app
+RUN chmod -R 777 ./app
 USER appuser
 
 # Set environment variables
