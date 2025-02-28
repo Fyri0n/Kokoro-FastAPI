@@ -23,7 +23,6 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app && \
-    chmod -R 777 /app
 
 USER appuser
 WORKDIR /app
@@ -41,6 +40,8 @@ COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
+
+RUN chmod -R 777 /app/api/src
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
