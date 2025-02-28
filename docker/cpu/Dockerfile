@@ -19,12 +19,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     mv /root/.local/bin/uvx /usr/local/bin/
 
-USER root
 # Create non-root user and set up directories and permissions
 RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app && \
-    chmod -R 777 /app/api/src
+    chmod -R 777 /app
 
 USER appuser
 WORKDIR /app
