@@ -53,6 +53,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 ENV DOWNLOAD_MODEL=true
 
+USER root
 # Download model if enabled
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
     python download_model.py --output api/src/models/v1_0; \
