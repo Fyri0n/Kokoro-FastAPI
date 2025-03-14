@@ -41,6 +41,9 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
+# Test module import to ensure it's found correctly
+RUN python -c "import api.src.main; print('Module imported successfully')"
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
