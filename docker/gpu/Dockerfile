@@ -29,6 +29,9 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
+# Make sure model output directory exists and is writable
+RUN mkdir -p api/src/models/v1_0 && \
+    chown -R appuser:appuser api/src/models
 
 # Set all environment variables in one go
 ENV PATH="/app/.venv/bin:$PATH" \
