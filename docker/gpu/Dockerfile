@@ -9,10 +9,8 @@ RUN apt-get update -y &&  \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     mv /root/.local/bin/uvx /usr/local/bin/ && \
-    useradd -m -u 1001 appuser && \
-    mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app
-    
+    useradd -m -u 1001 appuser
+
 USER appuser
 WORKDIR /app
 
@@ -29,11 +27,11 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-# Make sure model output directory exists and is writable
+# Ensure the model output directory exists and is writable
 RUN mkdir -p api/src/models/v1_0 && \
     chown -R appuser:appuser api/src/models
 
-# Set all environment variables in one go
+# Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
@@ -42,9 +40,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PHONEMIZER_ESPEAK_PATH=/usr/bin \
     PHONEMIZER_ESPEAK_DATA=/usr/share/espeak-ng-data \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
-    DEVICE="gpu"
-    
-ENV DOWNLOAD_MODEL=true
+    DEVICE="gpu" \
+    DOWNLOAD_MODEL=true
+
 # Download model if enabled
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
     python download_model.py --output api/src/models/v1_0; \
