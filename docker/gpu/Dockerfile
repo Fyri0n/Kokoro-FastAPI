@@ -29,9 +29,11 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-# Ensure the model output directory exists and is writable
-RUN mkdir -p api/src/models/v1_0 && \
-    chown -R appuser:appuser api/src/models
+# Ensure the model output directory is created and owned by appuser
+USER root
+RUN mkdir -p /app/api/src/models/v1_0 && \
+    chown -R appuser:appuser /app/api
+USER appuser
 
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -45,10 +47,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DEVICE="gpu" \
     DOWNLOAD_MODEL=true
 
-# Download model if enabled
+# Download model during image build
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-    python download_model.py --output api/src/models/v1_0; \
+    python download_model.py --output /app/api/src/models/v1_0; \
     fi
 
-# Run FastAPI server through entrypoint.sh
+# Entrypoint
 CMD ["./entrypoint.sh"]
