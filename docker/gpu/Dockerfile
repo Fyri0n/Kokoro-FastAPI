@@ -9,7 +9,9 @@ RUN apt-get update -y &&  \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     mv /root/.local/bin/uvx /usr/local/bin/ && \
-    useradd -m -u 1001 appuser
+    useradd -m -u 1001 appuser && \
+    mkdir -p /app/api/src/models/v1_0 && \
+    chown -R appuser:appuser /app
 
 USER appuser
 WORKDIR /app
