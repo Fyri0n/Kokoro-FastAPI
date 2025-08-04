@@ -14,13 +14,14 @@ import torch
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
-from structures.schemas import CaptionedSpeechRequest
 
 from ..core.config import settings
 from ..inference.base import AudioChunk
 from ..services.audio import AudioService
+from ..services.streaming_audio_writer import StreamingAudioWriter
 from ..services.tts_service import TTSService
 from ..structures import OpenAISpeechRequest
+from ..structures.schemas import CaptionedSpeechRequest
 
 
 # Load OpenAI mappings
@@ -90,73 +91,71 @@ async def process_and_validate_voices(
     voices = []
     # Convert input to list of voices
     if isinstance(voice_input, str):
-        voice_input=voice_input.replace(" ","").strip()
+        voice_input = voice_input.replace(" ", "").strip()
 
         if voice_input[-1] in "+-" or voice_input[0] in "+-":
-            raise ValueError(
-                f"Voice combination contains empty combine items"
-            )
+            raise ValueError(f"Voice combination contains empty combine items")
 
         if re.search(r"[+-]{2,}", voice_input) is not None:
-            raise ValueError(
-                f"Voice combination contains empty combine items"
-            )
+            raise ValueError(f"Voice combination contains empty combine items")
         voices = re.split(r"([-+])", voice_input)
     else:
-        voices = [[item,"+"] for item in voice_input][:-1]
-    
+        voices = [[item, "+"] for item in voice_input][:-1]
+
     available_voices = await tts_service.list_voices()
 
-    for voice_index in range(0,len(voices), 2):
-
+    for voice_index in range(0, len(voices), 2):
         mapped_voice = voices[voice_index].split("(")
         mapped_voice = list(map(str.strip, mapped_voice))
 
         if len(mapped_voice) > 2:
             raise ValueError(
-                    f"Voice '{voices[voice_index]}' contains too many weight items"
-                )
-        
+                f"Voice '{voices[voice_index]}' contains too many weight items"
+            )
+
         if mapped_voice.count(")") > 1:
             raise ValueError(
-                    f"Voice '{voices[voice_index]}' contains too many weight items"
-                )
-    
-        mapped_voice[0] = _openai_mappings["voices"].get(mapped_voice[0], mapped_voice[0])
+                f"Voice '{voices[voice_index]}' contains too many weight items"
+            )
+
+        mapped_voice[0] = _openai_mappings["voices"].get(
+            mapped_voice[0], mapped_voice[0]
+        )
 
         if mapped_voice[0] not in available_voices:
             raise ValueError(
-                    f"Voice '{mapped_voice[0]}' not found. Available voices: {', '.join(sorted(available_voices))}"
-                )
+                f"Voice '{mapped_voice[0]}' not found. Available voices: {', '.join(sorted(available_voices))}"
+            )
 
         voices[voice_index] = "(".join(mapped_voice)
-    
+
     return "".join(voices)
 
+
 async def stream_audio_chunks(
-    tts_service: TTSService, request: Union[OpenAISpeechRequest,CaptionedSpeechRequest], client_request: Request
+    tts_service: TTSService,
+    request: Union[OpenAISpeechRequest, CaptionedSpeechRequest],
+    client_request: Request,
+    writer: StreamingAudioWriter,
 ) -> AsyncGenerator[AudioChunk, None]:
     """Stream audio chunks as they're generated with client disconnect handling"""
     voice_name = await process_and_validate_voices(request.voice, tts_service)
-
-    unique_properties={
-        "return_timestamps":False
-    }
+    unique_properties = {"return_timestamps": False}
     if hasattr(request, "return_timestamps"):
-        unique_properties["return_timestamps"]=request.return_timestamps
-    
+        unique_properties["return_timestamps"] = request.return_timestamps
+
     try:
-        logger.info(f"Starting audio generation with lang_code: {request.lang_code}")
         async for chunk_data in tts_service.generate_audio_stream(
             text=request.input,
             voice=voice_name,
+            writer=writer,
             speed=request.speed,
             output_format=request.response_format,
-            lang_code=request.lang_code or settings.default_voice_code or voice_name[0].lower(),
+            lang_code=request.lang_code,
+            volume_multiplier=request.volume_multiplier,
             normalization_options=request.normalization_options,
             return_timestamps=unique_properties["return_timestamps"],
         ):
-
             # Check if client is still connected
             is_disconnected = client_request.is_disconnected
             if callable(is_disconnected):
@@ -174,7 +173,6 @@ async def stream_audio_chunks(
 
 @router.post("/audio/speech")
 async def create_speech(
-    
     request: OpenAISpeechRequest,
     client_request: Request,
     x_raw_response: str = Header(None, alias="x-raw-response"),
@@ -206,10 +204,14 @@ async def create_speech(
             "pcm": "audio/pcm",
         }.get(request.response_format, f"audio/{request.response_format}")
 
+        writer = StreamingAudioWriter(request.response_format, sample_rate=24000)
+
         # Check if streaming is requested (default for OpenAI client)
         if request.stream:
             # Create generator but don't start it yet
-            generator = stream_audio_chunks(tts_service, request, client_request)
+            generator = stream_audio_chunks(
+                tts_service, request, client_request, writer
+            )
 
             # If download link requested, wrap generator with temp file writer
             if request.return_download_link:
@@ -232,6 +234,10 @@ async def create_speech(
                     "X-Download-Path": download_path,
                 }
 
+                # Add header to indicate if temp file writing is available
+                if temp_writer._write_error:
+                    headers["X-Download-Status"] = "unavailable"
+
                 # Create async generator for streaming
                 async def dual_output():
                     try:
@@ -239,9 +245,9 @@ async def create_speech(
                         async for chunk_data in generator:
                             if chunk_data.output:  # Skip empty chunks
                                 await temp_writer.write(chunk_data.output)
-                                #if return_json:
+                                # if return_json:
                                 #    yield chunk, chunk_data
-                                #else:
+                                # else:
                                 yield chunk_data.output
 
                         # Finalize the temp file
@@ -254,6 +260,7 @@ async def create_speech(
                         # Ensure temp writer is closed
                         if not temp_writer._finalized:
                             await temp_writer.__aexit__(None, None, None)
+                        writer.close()
 
                 # Stream with temp file writing
                 return StreamingResponse(
@@ -268,8 +275,9 @@ async def create_speech(
                             yield chunk_data.output
                 except Exception as e:
                     logger.error(f"Error in single output streaming: {e}")
+                    writer.close()
                     raise
-                
+
             # Standard streaming without download link
             return StreamingResponse(
                 single_output(),
@@ -282,45 +290,83 @@ async def create_speech(
                 },
             )
         else:
+            headers = {
+                "Content-Disposition": f"attachment; filename=speech.{request.response_format}",
+                "Cache-Control": "no-cache",  # Prevent caching
+            }
+
             # Generate complete audio using public interface
             audio_data = await tts_service.generate_audio(
                 text=request.input,
                 voice=voice_name,
+                writer=writer,
                 speed=request.speed,
+                volume_multiplier=request.volume_multiplier,
                 normalization_options=request.normalization_options,
                 lang_code=request.lang_code,
             )
 
             audio_data = await AudioService.convert_audio(
                 audio_data,
-                24000,
                 request.response_format,
-                is_first_chunk=True,
+                writer,
                 is_last_chunk=False,
-                trim_audio=False
+                trim_audio=False,
             )
-            
+
             # Convert to requested format with proper finalization
             final = await AudioService.convert_audio(
                 AudioChunk(np.array([], dtype=np.int16)),
-                24000,
                 request.response_format,
-                is_first_chunk=False,
+                writer,
                 is_last_chunk=True,
             )
-            output=audio_data.output + final.output
+            output = audio_data.output + final.output
+
+            if request.return_download_link:
+                from ..services.temp_manager import TempFileWriter
+
+                # Use download_format if specified, otherwise use response_format
+                output_format = request.download_format or request.response_format
+                temp_writer = TempFileWriter(output_format)
+                await temp_writer.__aenter__()  # Initialize temp file
+
+                # Get download path immediately after temp file creation
+                download_path = temp_writer.download_path
+                headers["X-Download-Path"] = download_path
+
+                try:
+                    # Write chunks to temp file
+                    logger.info("Writing chunks to tempory file for download")
+                    await temp_writer.write(output)
+                    # Finalize the temp file
+                    await temp_writer.finalize()
+
+                except Exception as e:
+                    logger.error(f"Error in dual output: {e}")
+                    await temp_writer.__aexit__(type(e), e, e.__traceback__)
+                    raise
+                finally:
+                    # Ensure temp writer is closed
+                    if not temp_writer._finalized:
+                        await temp_writer.__aexit__(None, None, None)
+                    writer.close()
+
             return Response(
                 content=output,
                 media_type=content_type,
-                headers={
-                    "Content-Disposition": f"attachment; filename=speech.{request.response_format}",
-                    "Cache-Control": "no-cache",  # Prevent caching
-                },
+                headers=headers,
             )
 
     except ValueError as e:
         # Handle validation errors
         logger.warning(f"Invalid request: {str(e)}")
+
+        try:
+            writer.close()
+        except:
+            pass
+
         raise HTTPException(
             status_code=400,
             detail={
@@ -332,6 +378,12 @@ async def create_speech(
     except RuntimeError as e:
         # Handle runtime/processing errors
         logger.error(f"Processing error: {str(e)}")
+
+        try:
+            writer.close()
+        except:
+            pass
+
         raise HTTPException(
             status_code=500,
             detail={
@@ -343,6 +395,12 @@ async def create_speech(
     except Exception as e:
         # Handle unexpected errors
         logger.error(f"Unexpected error in speech generation: {str(e)}")
+
+        try:
+            writer.close()
+        except:
+            pass
+
         raise HTTPException(
             status_code=500,
             detail={
@@ -399,26 +457,23 @@ async def list_models():
                 "id": "tts-1",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
+                "owned_by": "kokoro",
             },
             {
                 "id": "tts-1-hd",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
+                "owned_by": "kokoro",
             },
             {
                 "id": "kokoro",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
-            }
+                "owned_by": "kokoro",
+            },
         ]
-        
-        return {
-            "object": "list",
-            "data": models
-        }
+
+        return {"object": "list", "data": models}
     except Exception as e:
         logger.error(f"Error listing models: {str(e)}")
         raise HTTPException(
@@ -430,6 +485,7 @@ async def list_models():
             },
         )
 
+
 @router.get("/models/{model}")
 async def retrieve_model(model: str):
     """Retrieve a specific model"""
@@ -440,22 +496,22 @@ async def retrieve_model(model: str):
                 "id": "tts-1",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
+                "owned_by": "kokoro",
             },
             "tts-1-hd": {
                 "id": "tts-1-hd",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
+                "owned_by": "kokoro",
             },
             "kokoro": {
                 "id": "kokoro",
                 "object": "model",
                 "created": 1686935002,
-                "owned_by": "kokoro"
-            }
+                "owned_by": "kokoro",
+            },
         }
-        
+
         # Check if requested model exists
         if model not in models:
             raise HTTPException(
@@ -463,10 +519,10 @@ async def retrieve_model(model: str):
                 detail={
                     "error": "model_not_found",
                     "message": f"Model '{model}' not found",
-                    "type": "invalid_request_error"
-                }
+                    "type": "invalid_request_error",
+                },
             )
-        
+
         # Return the specific model
         return models[model]
     except HTTPException:
@@ -481,6 +537,7 @@ async def retrieve_model(model: str):
                 "type": "server_error",
             },
         )
+
 
 @router.get("/audio/voices")
 async def list_voices():
