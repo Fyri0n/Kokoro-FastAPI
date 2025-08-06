@@ -22,7 +22,9 @@ COPY --chown=appuser:appuser pyproject.toml ./pyproject.toml
 
 # Install dependencies with GPU extras
 RUN uv venv --python 3.10 && \
-    uv sync --extra gpu --no-cache
+    uv sync --extra gpu --no-cache && \
+    /app/.venv/bin/python -m pip install --force-reinstall torch==1.13.1+cu118 torchvision==0.14.1+cu118 torchaudio==0.13.1 \
+    -f https://download.pytorch.org/whl/torch_stable.html
 
 # Copy project files including models
 COPY --chown=appuser:appuser api ./api
@@ -31,11 +33,6 @@ COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh && \
     mkdir -p /app/api/temp_files && \
     chmod -R 777 /app/api/temp_files
-
-#
-RUN python3 -m venv .venv
-RUN pip install torch==1.13.1+cu118 torchvision==0.14.1+cu118 torchaudio==0.13.1 -f https://download.pytorch.org/whl/torch_stable.html
-#
 
 # Set all environment variables in one go
 ENV PATH="/app/.venv/bin:$PATH" \
