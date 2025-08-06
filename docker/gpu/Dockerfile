@@ -35,7 +35,7 @@ RUN chmod +x ./entrypoint.sh
 # Ensure the model output directory is created and owned by appuser
 USER root
 RUN mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app/api
+    chown -R appuser:appuser /app
 USER appuser
 
 # Set environment variables
