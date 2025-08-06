@@ -32,6 +32,10 @@ RUN chmod +x ./entrypoint.sh && \
     mkdir -p /app/api/temp_files && \
     chmod -R 777 /app/api/temp_files
 
+#
+RUN python3 -m venv .venv
+RUN pip install torch==1.13.1+cu118 torchvision==0.14.1+cu118 torchaudio==0.13.1 -f https://download.pytorch.org/whl/torch_stable.html
+#
 
 # Set all environment variables in one go
 ENV PATH="/app/.venv/bin:$PATH" \
