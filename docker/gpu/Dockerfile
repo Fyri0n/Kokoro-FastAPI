@@ -24,10 +24,7 @@ COPY --chown=appuser:appuser pyproject.toml ./pyproject.toml
 
 # Install dependencies with GPU extras
 RUN uv venv --python 3.10 && \
-    uv sync --extra gpu --no-cache && \
-    # added to install torch for gtx1080ti
-    . ./.venv/bin/activate && \
-    pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url 
+    uv sync --extra gpu --no-cache --index-url torch=https://download.pytorch.org/whl/cu118
 
 # Copy project files including models
 COPY --chown=appuser:appuser api ./api
