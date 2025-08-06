@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM nvidia/cuda:12.4.1-base-ubuntu22.04
+FROM --platform=$BUILDPLATFORM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \
@@ -8,9 +8,8 @@ RUN apt-get update -y &&  \
     ln -s /usr/lib/*/espeak-ng-data/* /usr/share/espeak-ng-data/ && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
-    mv /root/.local/bin/uvx /usr/local/bin/
-    
-RUN useradd -m -u 1001 appuser && \
+    mv /root/.local/bin/uvx /usr/local/bin/  && \
+    useradd -m -u 1001 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app && \
     chmod -R 755 /app
