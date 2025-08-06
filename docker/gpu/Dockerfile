@@ -1,6 +1,4 @@
 FROM --platform=$BUILDPLATFORM nvidia/cuda:12.4.1-base-ubuntu22.04
-# Set non-interactive frontend
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \
@@ -15,7 +13,7 @@ RUN apt-get update -y &&  \
 RUN useradd -m -u 1001 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
     chown -R appuser:appuser /app
-
+    
 USER appuser
 WORKDIR /app
 
@@ -32,13 +30,8 @@ COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
 
-# Ensure the model output directory is created and owned by appuser
-USER root
-RUN mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app
-USER appuser
 
-# Set environment variables
+# Set all environment variables in one go
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app:/app/api \
@@ -47,13 +40,13 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PHONEMIZER_ESPEAK_PATH=/usr/bin \
     PHONEMIZER_ESPEAK_DATA=/usr/share/espeak-ng-data \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
-    DEVICE="gpu" \
-    DOWNLOAD_MODEL=true
-
-# Download model during image build
+    DEVICE="gpu"
+    
+ENV DOWNLOAD_MODEL=true
+# Download model if enabled
 RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-    python download_model.py --output /app/api/src/models/v1_0; \
+    python download_model.py --output api/src/models/v1_0; \
     fi
 
-# Entrypoint
+# Run FastAPI server through entrypoint.sh
 CMD ["./entrypoint.sh"]
