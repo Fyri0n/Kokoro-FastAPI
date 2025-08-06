@@ -6,7 +6,16 @@ services:
       context: ../..
       dockerfile: docker/gpu/Dockerfile
     volumes:
-      - ../../api:/app/api
+      # Mount api directory but exclude the models and temp_files directories
+      - ../../api/src/builds:/app/api/src/builds
+      - ../../api/src/core:/app/api/src/core
+      - ../../api/src/inference:/app/api/src/inference
+      - ../../api/src/routers:/app/api/src/routers
+      - ../../api/src/services:/app/api/src/services
+      - ../../api/src/structures:/app/api/src/structures
+      - ../../api/src/voices:/app/api/src/voices
+      - ../../api/src/main.py:/app/api/src/main.py
+      - ../../api/tests:/app/api/tests
     user: "1001:1001"  # Ensure container runs as UID 1001 (appuser)
     ports:
       - "8880:8880"
@@ -14,6 +23,8 @@ services:
       - PYTHONPATH=/app:/app/api
       - USE_GPU=true
       - PYTHONUNBUFFERED=1
+      - MODEL_DIR=src/models
+      - DOWNLOAD_MODEL=false  # Model is already downloaded during build
     deploy:
       resources:
         reservations:

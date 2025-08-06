@@ -29,7 +29,9 @@ RUN uv venv --python 3.10 && \
 COPY --chown=appuser:appuser api ./api
 COPY --chown=appuser:appuser web ./web
 COPY --chown=appuser:appuser docker/scripts/ ./
-RUN chmod +x ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh && \
+    mkdir -p /app/api/temp_files && \
+    chmod -R 777 /app/api/temp_files
 
 
 # Set all environment variables in one go
@@ -43,13 +45,16 @@ ENV PATH="/app/.venv/bin:$PATH" \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
     DEVICE="gpu"
     
-# Set to false as we're downloading the model during build time
-ENV DOWNLOAD_MODEL=false
+# Set model environment variables
+ENV MODEL_DIR=src/models
 
 # Download model during build time
-RUN python download_model.py --output api/src/models/v1_0 && \
-    # Ensure proper permissions
-    chmod -R 755 /app/api/src/models/v1_0
+RUN python download_model.py --output /app/api/src/models/v1_0 && \
+    # Ensure proper permissions on all model directories
+    chmod -R 777 /app/api/src/models && \
+    # Create symbolic link to ensure v1_0 files are found in the right place
+    ln -sf /app/api/src/models/v1_0/kokoro-v1_0.pth /app/api/src/models/v1_0.pth && \
+    ln -sf /app/api/src/models/v1_0/config.json /app/api/src/models/v1_0.json
 
 # Run FastAPI server through entrypoint.sh
 CMD ["./entrypoint.sh"]
