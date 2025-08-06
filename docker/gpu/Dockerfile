@@ -12,7 +12,8 @@ RUN apt-get update -y &&  \
     
 RUN useradd -m -u 1001 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app
     
 USER appuser
 WORKDIR /app
@@ -42,11 +43,13 @@ ENV PATH="/app/.venv/bin:$PATH" \
     ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
     DEVICE="gpu"
     
-ENV DOWNLOAD_MODEL=true
-# Download model if enabled
-RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-    python download_model.py --output api/src/models/v1_0; \
-    fi
+# Set to false as we're downloading the model during build time
+ENV DOWNLOAD_MODEL=false
+
+# Download model during build time
+RUN python download_model.py --output api/src/models/v1_0 && \
+    # Ensure proper permissions
+    chmod -R 755 /app/api/src/models/v1_0
 
 # Run FastAPI server through entrypoint.sh
 CMD ["./entrypoint.sh"]
