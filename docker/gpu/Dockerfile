@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM nvidia/cuda:12.4.0-cudnn8-runtime-ubuntu22.04
+FROM --platform=$BUILDPLATFORM nvidia/cuda:12.4.1-cudnn8-runtime-ubuntu22.04
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \
