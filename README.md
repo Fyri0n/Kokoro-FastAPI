@@ -55,7 +55,9 @@ docker run --gpus all -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-gpu:latest  #NV
         ```bash
         git clone https://github.com/remsky/Kokoro-FastAPI.git
         cd Kokoro-FastAPI
-
+        
+        sudo chown -R 1001:1001 ./api
+        
         cd docker/gpu  # For GPU support
         # or cd docker/cpu  # For CPU support
         docker compose up --build
